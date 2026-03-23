@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat to PDF Converter | High Quality</title>
+    <!-- Google Fonts: Poppins and Caveat for premium UI matching the screenshot -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Seamless background grid -->
+    <div class="bg-grid"></div>
+
+    <!-- Floating 3D Animated Stars (Golden Sparkles) -->
+    <div class="floating-star star-1">
+        <svg fill="none" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
+            <path d="M30 10C30 21.0457 21.0457 30 10 30C21.0457 30 30 38.9543 30 50C30 38.9543 38.9543 30 50 30C38.9543 30 30 21.0457 30 10Z" fill="#ffc83d"/>
+            <path d="M15 5C15 9.41828 11.4183 13 7 13C11.4183 13 15 16.5817 15 21C15 16.5817 18.5817 13 23 13C18.5817 13 15 9.41828 15 5Z" fill="#ffc83d"/>
+            <path d="M47 37C47 41.4183 43.4183 45 39 45C43.4183 45 47 48.5817 47 53C47 48.5817 50.5817 45 55 45C50.5817 45 47 41.4183 47 37Z" fill="#ffc83d"/>
+        </svg>
+    </div>
+    <div class="floating-star star-2">
+        <svg fill="none" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
+            <path d="M30 10C30 21.0457 21.0457 30 10 30C21.0457 30 30 38.9543 30 50C30 38.9543 38.9543 30 50 30C38.9543 30 30 21.0457 30 10Z" fill="#ffc83d"/>
+            <path d="M15 5C15 9.41828 11.4183 13 7 13C11.4183 13 15 16.5817 15 21C15 16.5817 18.5817 13 23 13C18.5817 13 15 9.41828 15 5Z" fill="#ffc83d"/>
+            <path d="M47 37C47 41.4183 43.4183 45 39 45C43.4183 45 47 48.5817 47 53C47 48.5817 50.5817 45 55 45C50.5817 45 47 41.4183 47 37Z" fill="#ffc83d"/>
+        </svg>
+    </div>
+
+    <!-- Floating Navbar -->
+    <nav class="navbar">
+        <div class="nav-content">
+            <div class="logo">
+                <i class="fa-solid fa-layer-group"></i> ChatPDF<span class="logo-accent">.io</span>
+            </div>
+            <div class="nav-links">
+                <a href="#" class="nav-badge"><i class="fa-solid fa-bolt"></i> Free Forever</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="hero-section">
+        <div class="container">
+            <!-- Sleek main typography aligned perfectly -->
+            <h1 class="main-title">
+                Capture Your <span class="text-gradient">AI Genius</span> <br>in One Click_
+            </h1>
+            <p class="subtitle">Instantly convert your ChatGPT, Claude, and Gemini conversations into beautifully formatted, readable PDFs. Never lose a valuable prompt again.</p>
+
+            <!-- Wide and high-converting input box -->
+            <div class="form-wrapper">
+                <div class="input-container">
+                    <div class="input-icon-wrapper">
+                        <i class="fa-solid fa-search"></i>
+                    </div>
+                    <input type="url" id="chatUrl" placeholder="Paste your shared chat link here..." autocomplete="off">
+                    <button id="generateBtn" class="primary-btn">
+                        <span class="btn-text">Extract PDF</span>
+                    </button>
+                </div>
+                
+                <div id="errorMessage" class="error-toast">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                    <span>Please enter a valid shared link.</span>
+                </div>
+            </div>
+
+            <!-- Beautiful loader state -->
+            <div id="loadingState" class="loading-wrapper hidden">
+                <div class="loader-ring">
+                    <div class="loader-ring-inner"></div>
+                </div>
+                <h3 style="margin-bottom: 8px;">Brewing your PDF</h3>
+                <p class="loading-text" style="color: #94a3b8; font-size: 0.95rem; margin-bottom: 20px;">Analyzing tokens and formatting structure...</p>
+                <div class="progress-track">
+                    <div class="progress-fill"></div>
+                </div>
+            </div>
+
+            <!-- Soft social proof -->
+            <div class="social-proof">
+                <p class="proof-text">Seamlessly works with your favorite AI tools</p>
+                <div class="platform-logos">
+                    <div class="platform-chip chatgpt">
+                        <i class="fa-solid fa-robot"></i> ChatGPT
+                    </div>
+                    <div class="platform-chip claude">
+                        <i class="fa-solid fa-brain"></i> Claude
+                    </div>
+                    <div class="platform-chip gemini">
+                        <i class="fa-solid fa-sparkles"></i> Gemini
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </main>
+
+    <!-- Developer Footer -->
+    <footer class="footer">
+        <div class="developer-credit">
+            Developed by <span class="text-gradient">Azhan Ali</span>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
