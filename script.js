@@ -60,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // Real API Call to Node.js Backend
-            const response = await fetch('http://localhost:3000/api/generate-pdf', {
+            const response = await fetch('/api/generate-pdf', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
