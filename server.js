@@ -14,8 +14,17 @@ const PORT = process.env.PORT || 3000;
 app.use(cors()); 
 app.use(express.json());
 
-// Serve static files from the current folder
+// Serve static files from the current folder (Works locally)
 app.use(express.static(__dirname));
+
+// Fix for Vercel: Explicitly define routes so Vercel's bundler includes these files
+app.get('/style.css', (req, res) => {
+    res.sendFile(path.join(__dirname, 'style.css'));
+});
+
+app.get('/script.js', (req, res) => {
+    res.sendFile(path.join(__dirname, 'script.js'));
+});
 
 // Serve Frontend properly
 app.get('/', (req, res) => {
