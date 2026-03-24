@@ -13,6 +13,62 @@ const PORT = 3000;
 app.use(cors()); 
 app.use(express.json());
 
+// --- Platform Detection Helper ---
+function detectPlatform(url) {
+    if (/chatgpt\.com|chat\.openai\.com/i.test(url)) return 'chatgpt';
+    if (/gemini\.google\.com|g\.co\/gemini/i.test(url)) return 'gemini';
+    if (/claude\.ai/i.test(url)) return 'claude';
+    return 'unknown';
+}
+
+// --- Platform-specific content selectors to wait for ---
+const PLATFORM_CONTENT_SELECTORS = {
+    chatgpt: [
+        '[data-message-author-role]',           // Chat message containers
+        'article',                               // Article wrapper for messages  
+        '.markdown',                             // Rendered markdown content
+        '.text-message',                         // Text message blocks
+    ],
+    gemini: [
+        'share-turn-viewer',                     // Gemini shared page turn viewer
+        'message-content',                       // Message content container
+        'response-container',                    // Response container
+        '.markdown',                             // Markdown rendered content
+    ],
+    claude: [
+        '.font-user-message',                   // Claude user message
+        '[data-testid]',                         // Claude test IDs
+    ]
+};
+
+// --- Wait for platform-specific content to load ---
+async function waitForContent(page, platform) {
+    const selectors = PLATFORM_CONTENT_SELECTORS[platform] || [];
+    
+    for (const selector of selectors) {
+        try {
+            await page.waitForSelector(selector, { timeout: 15000 });
+            console.log(`[✅] Content selector found: "${selector}"`);
+            return true;
+        } catch (e) {
+            console.log(`[⏳] Selector "${selector}" not found, trying next...`);
+        }
+    }
+    
+    // If no specific selector was found, check if the page has substantial content
+    const hasContent = await page.evaluate(() => {
+        return document.body.innerText.length > 200;
+    });
+    
+    if (hasContent) {
+        console.log('[✅] Page has substantial text content, proceeding...');
+        return true;
+    }
+    
+    console.log('[⚠️] No specific content selectors found, will rely on wait time...');
+    return false;
+}
+
 // --- API Endpoint: Generate PDF ---
 app.post('/api/generate-pdf', async (req, res) => {
     const { url } = req.body;
@@ -27,79 +83,175 @@ app.post('/api/generate-pdf', async (req, res) => {
         finalUrl = 'https://' + finalUrl;
     }
 
+    const platform = detectPlatform(finalUrl);
+    let browser;
+
     try {
         console.log(`\n[🚀] New Request Processed for URL: ${finalUrl}`);
+        console.log(`[🔍] Detected Platform: ${platform.toUpperCase()}`);
         
         console.log('[🤖] Launching Stealth Headless Browser...');
-        const browser = await puppeteer.launch({ 
-            headless: true, // "new" headless mode often breaks stealth evasions on ChatGPT
+        browser = await puppeteer.launch({ 
+            headless: 'new',
             args: [
                 '--no-sandbox', 
                 '--disable-setuid-sandbox',
                 '--disable-blink-features=AutomationControlled',
                 '--ignore-certificate-errors',
-                '--window-size=1280,800'
+                '--window-size=1280,800',
+                '--disable-web-security',
+                '--disable-features=IsolateOrigins,site-per-process'
             ]
         });
         
         const page = await browser.newPage();
         
         // Set a realistic User-Agent and Headers to prevent ChatGPT API from blocking the request
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
         await page.setExtraHTTPHeaders({
-            'Accept-Language': 'en-US,en;q=0.9'
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Cache-Control': 'no-cache',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Upgrade-Insecure-Requests': '1'
         });
 
         // Use a standard desktop viewport
         await page.setViewport({ width: 1280, height: 800 });
 
-        console.log('[🌐] Navigating to the URL...');
-        // Fix: Use 'domcontentloaded' instead of 'networkidle2' because ChatGPT/Gemini have background polling which causes 60s timeout crash
-        await page.goto(finalUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-        
-        // Wait extra time for Cloudflare/Turnstile and heavy React rendering
-        console.log('[⏳] Waiting for Security Checks & Data Fetch (ChatGPT/Gemini/Claude)...');
-        await new Promise(resolve => setTimeout(resolve, 10000)); // Solid 10 seconds to guarantee hydration
+        // Enable JavaScript and allow all cookies
+        await page.setJavaScriptEnabled(true);
 
-        // Auto-click "Try again" if ChatGPT fails to load content first time
+        console.log('[🌐] Navigating to the URL...');
+        
+        // Platform-specific navigation strategy
+        if (platform === 'chatgpt') {
+            // ChatGPT shared pages: try networkidle2 first with generous timeout
+            try {
+                await page.goto(finalUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+            } catch (navError) {
+                console.log('[⚠️] networkidle2 timed out for ChatGPT, retrying with domcontentloaded...');
+                await page.goto(finalUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            }
+        } else if (platform === 'gemini') {
+            // Gemini shared pages: use networkidle2 - these pages load via JS
+            try {
+                await page.goto(finalUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+            } catch (navError) {
+                console.log('[⚠️] networkidle2 timed out for Gemini, retrying with domcontentloaded...');
+                await page.goto(finalUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            }
+        } else {
+            // Claude and others
+            await page.goto(finalUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        }
+        
+        // Wait for Cloudflare/Turnstile challenge if present
+        console.log('[⏳] Waiting for Security Checks...');
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        
+        // Auto-click "Try again" / "Accept" / "Verify" buttons if present
         const clickedP = await page.evaluate(() => {
             const buttons = Array.from(document.querySelectorAll('button'));
-            const tryAgainBtn = buttons.find(b => b.textContent && (b.textContent.includes('Try again') || b.textContent.includes('Reload') || b.textContent.includes('Accept')));
-            if (tryAgainBtn) {
-                tryAgainBtn.click();
+            const actionBtn = buttons.find(b => b.textContent && (
+                b.textContent.includes('Try again') || 
+                b.textContent.includes('Reload') || 
+                b.textContent.includes('Accept') ||
+                b.textContent.includes('Verify') ||
+                b.textContent.includes('Continue')
+            ));
+            if (actionBtn) {
+                actionBtn.click();
                 return true;
             }
             return false;
         });
         
         if (clickedP) {
-            console.log('[⏳] Clicked "Try again / Accept", waiting 6 seconds for data to fetch...');
-            await new Promise(resolve => setTimeout(resolve, 6000));
+            console.log('[⏳] Clicked action button, waiting for page reload...');
+            await new Promise(resolve => setTimeout(resolve, 8000));
         }
+
+        // Wait for actual platform content to appear
+        console.log('[⏳] Waiting for chat content to render...');
+        const contentFound = await waitForContent(page, platform);
+        
+        // Extra wait for JS hydration after content selectors are found
+        if (platform === 'chatgpt') {
+            console.log('[⏳] Extra wait for ChatGPT React hydration...');
+            await new Promise(resolve => setTimeout(resolve, 8000));
+        } else if (platform === 'gemini') {
+            console.log('[⏳] Extra wait for Gemini web components to render...');
+            await new Promise(resolve => setTimeout(resolve, 8000));
+            
+            // Gemini sometimes lazy-loads content, scroll to trigger it
+            await page.evaluate(async () => {
+                await new Promise((resolve) => {
+                    let totalHeight = 0;
+                    const distance = 300;
+                    const timer = setInterval(() => {
+                        window.scrollBy(0, distance);
+                        totalHeight += distance;
+                        if (totalHeight >= document.body.scrollHeight) {
+                            clearInterval(timer);
+                            window.scrollTo(0, 0);
+                            resolve();
+                        }
+                    }, 200);
+                });
+            });
+            await new Promise(resolve => setTimeout(resolve, 3000));
+        } else {
+            await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+
+        // Debug: Log page content length and title
+        const debugInfo = await page.evaluate(() => {
+            return {
+                title: document.title,
+                bodyLength: document.body.innerText.length,
+                url: window.location.href
+            };
+        });
+        console.log(`[🔍] Page Debug: Title="${debugInfo.title}", Content Length=${debugInfo.bodyLength}, Final URL=${debugInfo.url}`);
 
         console.log('[🧹] Cleaning up the page (Hiding Popups, Headers, Footers)...');
         
         // Inject script to delete unwanted UI elements (DOM Manipulation)
-        await page.evaluate(() => {
+        await page.evaluate((currentPlatform) => {
             // Helper function to remove elements by selector
             const removeEls = (selector) => {
                 document.querySelectorAll(selector).forEach(el => el.remove());
             };
 
-            // 1. ChatGPT specific cleanup
-            removeEls('div.flex-shrink-0'); // Usually sidebars/headers
-            removeEls('button'); // Hide all buttons (Copy, Share, Like, Dislike)
-            removeEls('[max-width="md"] header'); // Hide header
-            removeEls('footer'); 
-            removeEls('.sticky'); // Make sure sticky footers are gone
-
-            // 2. Claude specific cleanup
-            removeEls('.fixed'); 
-            removeEls('nav');
-            
-            // 3. Gemini specific cleanup
-            removeEls('chat-window-header');
-            removeEls('bottom-bar');
+            // Platform-specific cleanup
+            if (currentPlatform === 'chatgpt') {
+                removeEls('div.flex-shrink-0'); // Usually sidebars/headers
+                removeEls('button'); // Hide all buttons (Copy, Share, Like, Dislike)
+                removeEls('[max-width="md"] header'); // Hide header
+                removeEls('footer'); 
+                removeEls('.sticky'); // Make sure sticky footers are gone
+                removeEls('header');
+                removeEls('[role="banner"]');
+                removeEls('.bg-token-sidebar-surface-primary');
+            } else if (currentPlatform === 'claude') {
+                removeEls('.fixed'); 
+                removeEls('nav');
+                removeEls('button');
+            } else if (currentPlatform === 'gemini') {
+                removeEls('chat-window-header');
+                removeEls('bottom-bar');
+                removeEls('.share-title-section button');
+                removeEls('.link-action-buttons');
+                removeEls('header');
+                removeEls('footer');
+                removeEls('[role="banner"]');
+                removeEls('[role="navigation"]');
+            }
 
             // 4. Premium PDF Styling & Branding injection
             const style = document.createElement('style');
@@ -148,6 +300,27 @@ app.post('/api/generate-pdf', async (req, res) => {
                     margin-bottom: 20px !important;
                     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
                 }
+
+                /* Gemini specific premium styling */
+                share-turn-viewer {
+                    display: block !important;
+                    padding: 16px !important;
+                    margin-bottom: 12px !important;
+                }
+
+                user-query {
+                    background-color: #f1f5f9 !important;
+                    border: 1px solid #e2e8f0 !important;
+                    padding: 16px !important;
+                    border-radius: 12px !important;
+                    display: block !important;
+                    margin-bottom: 12px !important;
+                }
+
+                response-container {
+                    display: block !important;
+                    padding: 16px !important;
+                }
             `;
             document.head.appendChild(style);
 
@@ -158,7 +331,7 @@ app.post('/api/generate-pdf', async (req, res) => {
                 <p>Premium AI Conversation Export &bull; Developed by Azhan Ali</p>
             `;
             document.body.insertBefore(branding, document.body.firstChild);
-        });
+        }, platform);
 
         console.log('[📄] Generating Premium PDF... (Step 4: PDF Builder)');
         // Generate a beautifully formatted PDF from the cleaned DOM
@@ -169,6 +342,7 @@ app.post('/api/generate-pdf', async (req, res) => {
         });
         
         await browser.close();
+        browser = null;
         console.log('[✅] PDF Extraction Successful! Sending file to user.');
 
         // Sending the generated PDF
@@ -178,6 +352,9 @@ app.post('/api/generate-pdf', async (req, res) => {
         
     } catch (error) {
         console.error('Ek error aa gai PDF banate waqt:', error);
+        if (browser) {
+            try { await browser.close(); } catch (e) {}
+        }
         res.status(500).json({ error: 'Scraping failed or link was invalid. PDF nahi ban payi.' });
     }
 });
