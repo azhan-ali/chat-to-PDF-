@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+const chromium = require('@sparticuz/chromium');
 
 // Use stealth plugin to bypass Cloudflare / Bot detection
 puppeteer.use(StealthPlugin());
@@ -109,7 +110,9 @@ app.post('/api/generate-pdf', async (req, res) => {
         console.log(`[🔍] Detected Platform: ${platform.toUpperCase()}`);
         
         console.log('[🤖] Launching Stealth Headless Browser...');
-        browser = await puppeteer.launch({ 
+        
+        const isVercel = process.env.VERCEL || process.env.NODE_ENV === 'production';
+        let launchOptions = {
             headless: 'new',
             args: [
                 '--no-sandbox', 
@@ -120,7 +123,20 @@ app.post('/api/generate-pdf', async (req, res) => {
                 '--disable-web-security',
                 '--disable-features=IsolateOrigins,site-per-process'
             ]
-        });
+        };
+
+        if (isVercel) {
+            console.log('[☁️] Running in Vercel mode: Injecting @sparticuz/chromium');
+            launchOptions = {
+                args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
+                defaultViewport: chromium.defaultViewport,
+                executablePath: await chromium.executablePath(),
+                headless: chromium.headless,
+                ignoreHTTPSErrors: true,
+            };
+        }
+
+        browser = await puppeteer.launch(launchOptions);
         
         const page = await browser.newPage();
         
